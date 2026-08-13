@@ -4,23 +4,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.models.user import User
 from app.routers.deps import get_current_user
-from app.schemas.task import TaskCreate, TaskOut, TaskUpdate
+from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 from app.services import task_service
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 
-@router.get("", response_model=list[TaskOut])
+@router.get("", response_model=list[TaskResponse])
 async def get_tasks(db: AsyncSession = Depends(get_db)):
     return await task_service.list_tasks(db)
 
 
-@router.post("", response_model=TaskOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 async def create_task(payload: TaskCreate, db: AsyncSession = Depends(get_db)):
     return await task_service.create_task(db, payload)
 
 
-@router.put("/{task_id}", response_model=TaskOut)
+@router.put("/{task_id}", response_model=TaskResponse)
 async def update_task(
     task_id: int,
     payload: TaskUpdate,

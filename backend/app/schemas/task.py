@@ -27,7 +27,7 @@ class TaskUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
-class TaskOut(BaseModel):
+class TaskResponse(BaseModel):
     id: int
     title: str
     description: str
