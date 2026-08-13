@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60 * 24
 
-    cors_origins: list[str] = ["*"]
+    cors_origins: list[str] = ["http://localhost:8000"]
 
 
 @lru_cache

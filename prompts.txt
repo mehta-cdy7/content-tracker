@@ -1,0 +1,13 @@
+Read @specs/api-contract.md and @specs/seed-data.json.
+
+Create the SQLAlchemy 2.0 async Task model in backend/app/models/task.py.
+Field names must exactly match the snake_case keys in seed-data.json.
+State and assigned_role must be Python Enums.
+
+Create corresponding Pydantic v2 schemas in backend/app/schemas/task.py:
+  - TaskCreate (request body for POST)
+  - TaskUpdate (request body for PUT, all fields optional)
+  - TaskResponse (response body for all endpoints)
+
+Set up the async database engine in backend/app/database.py using
+SQLite with aiosqlite. Include a get_db dependency for FastAPI.
