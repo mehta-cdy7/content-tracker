@@ -15,6 +15,13 @@ async def list_tasks(db: AsyncSession) -> list[Task]:
     return list(result.scalars().all())
 
 
+async def list_tasks_by_role(db: AsyncSession, role: Role) -> list[Task]:
+    result = await db.execute(
+        select(Task).where(Task.assigned_role == role).order_by(Task.id)
+    )
+    return list(result.scalars().all())
+
+
 async def get_task_or_404(db: AsyncSession, task_id: int) -> Task:
     task = await db.get(Task, task_id)
     if task is None:

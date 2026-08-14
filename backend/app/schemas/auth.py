@@ -3,11 +3,6 @@ from pydantic import BaseModel, Field
 from app.models.enums import Role
 
 
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-
 class TokenResponse(BaseModel):
     access_token: str = Field(serialization_alias="access_token")
     token_type: str = "bearer"

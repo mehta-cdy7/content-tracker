@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.models.enums import Role
 from app.models.user import User
-from app.routers.deps import get_current_user
+from app.routers.deps import get_current_user, require_role
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 from app.services import task_service
 
@@ -11,12 +12,28 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 
 @router.get("", response_model=list[TaskResponse])
-async def get_tasks(db: AsyncSession = Depends(get_db)):
+async def get_tasks(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     return await task_service.list_tasks(db)
 
 
+@router.get("/by-role/{role}", response_model=list[TaskResponse])
+async def get_tasks_by_role(
+    role: Role,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await task_service.list_tasks_by_role(db, role)
+
+
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
-async def create_task(payload: TaskCreate, db: AsyncSession = Depends(get_db)):
+async def create_task(
+    payload: TaskCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(Role.ADMIN, Role.CONTENT)),
+):
     return await task_service.create_task(db, payload)
 
 

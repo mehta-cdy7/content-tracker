@@ -17,7 +17,7 @@ async def authenticate(db: AsyncSession, username: str, password: str) -> str:
     user = await get_user_by_username(db, username)
     if user is None or not verify_password(password, user.hashed_password):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    return create_access_token(subject=str(user.id), extra_claims={"role": user.role.value})
+    return create_access_token(subject=user.username, extra_claims={"role": user.role.value})
 
 
 async def create_user(db: AsyncSession, payload: UserCreate, current_user: User) -> User:

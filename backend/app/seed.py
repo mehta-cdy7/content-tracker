@@ -18,8 +18,14 @@ from app.models.user import User
 
 SEED_DATA_PATH = Path(__file__).resolve().parent.parent.parent / "specs" / "seed-data.json"
 
-DEFAULT_ADMIN_USERNAME = "admin"
-DEFAULT_ADMIN_PASSWORD = "changeme123"  # noqa: S105 — dev-only seed credential
+# Demo credentials only. Production must use stronger passwords. noqa: S105
+SEED_USERS: list[tuple[str, str, Role]] = [
+    ("admin", "admin123", Role.ADMIN),
+    ("content", "content123", Role.CONTENT),
+    ("editor", "editor123", Role.EDITOR),
+    ("uploader", "uploader123", Role.UPLOADER),
+    ("demo", "demo123", Role.EDITOR),
+]
 
 
 async def seed_tasks(session) -> None:
@@ -43,28 +49,29 @@ async def seed_tasks(session) -> None:
     print(f"Seeded {len(raw)} tasks.")
 
 
-async def seed_admin(session) -> None:
-    existing = (
-        await session.execute(select(User).where(User.username == DEFAULT_ADMIN_USERNAME))
-    ).scalar_one_or_none()
-    if existing is not None:
-        print("Admin user already exists, skipping.")
-        return
+async def seed_users(session) -> None:
+    for username, password, role in SEED_USERS:
+        existing = (
+            await session.execute(select(User).where(User.username == username))
+        ).scalar_one_or_none()
+        if existing is not None:
+            print(f"User '{username}' already exists, skipping.")
+            continue
 
-    session.add(
-        User(
-            username=DEFAULT_ADMIN_USERNAME,
-            hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
-            role=Role.ADMIN,
+        session.add(
+            User(
+                username=username,
+                hashed_password=hash_password(password),
+                role=role,
+            )
         )
-    )
-    print(f"Seeded admin user '{DEFAULT_ADMIN_USERNAME}' (password: {DEFAULT_ADMIN_PASSWORD}).")
+        print(f"Seeded user '{username}' (role: {role.value}).")
 
 
 async def main() -> None:
     async with AsyncSessionLocal() as session:
         await seed_tasks(session)
-        await seed_admin(session)
+        await seed_users(session)
         await session.commit()
 
 
