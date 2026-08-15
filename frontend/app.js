@@ -72,24 +72,43 @@ let tasks = [
 let currentRole = 'Admin';
 let nextId = 6;
 let draggedTaskId = null;
+const deletingTaskIds = new Set(); // guards against double-click firing a second DELETE on an id already in flight
+
+const API_BASE = '';
+const TOKEN_KEY = 'codecast_token';
 
 /* ════════════════════════════════════════════════════════
-   Mock API  —  drop-in replaceable with real fetch() calls
+   API  —  real fetch() against the FastAPI backend
    Philosophy: "Done vs. Verified" — every call is awaited
    and every failure is caught and surfaced, never silently swallowed.
 ════════════════════════════════════════════════════════ */
 
-/**
- * Simulates a fetch() call to the Spring Boot backend.
- * Currently rejects all requests — backend not yet connected.
- * Replace this function body with real fetch() once the API is running.
- */
-function mockFetch(url, options = {}) {
-  return fetch(`http://localhost:8000${url}`, options).then(async (response) => {
+/** Adds the bearer token to every request; on 401 clears session and shows login. */
+function apiFetch(url, options = {}) {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const headers = { ...(options.headers || {}) };
+  if (token && typeof token === 'string') {
+    const cleanToken = token.trim().replace(/^["']|["']$/g, '');
+    if (cleanToken) {
+      headers['Authorization'] = `Bearer ${cleanToken}`;
+    }
+  }
+
+  const cleanUrl = url.trim();
+  return fetch(`${API_BASE}${cleanUrl}`, { ...options, headers }).then(async (response) => {
+    if (response.status === 401) {
+      localStorage.removeItem(TOKEN_KEY);
+      showLoginForm();
+    }
     let data = null;
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      data = await response.json();
+    if (response.status !== 204 && response.status !== 205) {
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const text = await response.text();
+        if (text && text.trim().length > 0) {
+          data = JSON.parse(text);
+        }
+      }
     }
     return { ok: response.ok, status: response.status, data };
   });
@@ -99,7 +118,7 @@ function mockFetch(url, options = {}) {
 const api = {
   async getTasks() {
     try {
-      const res = await mockFetch('/api/tasks');
+      const res = await apiFetch('/api/tasks');
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       return res.data;
     } catch (err) {
@@ -109,7 +128,7 @@ const api = {
   },
 
   async createTask(payload) {
-    const res = await mockFetch('/api/tasks', {
+    const res = await apiFetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -119,7 +138,8 @@ const api = {
   },
 
   async updateTask(id, updates) {
-    const res = await mockFetch(`/api/tasks/${id}`, {
+    const cleanId = encodeURIComponent(String(id).trim());
+    const res = await apiFetch(`/api/tasks/${cleanId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -129,9 +149,27 @@ const api = {
   },
 
   async deleteTask(id) {
-    const res = await mockFetch(`/api/tasks/${id}`, { method: 'DELETE' });
+    const cleanId = encodeURIComponent(String(id).trim());
+    const res = await apiFetch(`/api/tasks/${cleanId}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(`Server error ${res.status}`);
     return true;
+  },
+
+  async login(username, password) {
+    const body = new URLSearchParams({ username, password });
+    const res = await apiFetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    if (!res.ok) throw new Error(res.data?.detail || `Login failed (${res.status})`);
+    return res.data; // { access_token, token_type }
+  },
+
+  async me() {
+    const res = await apiFetch('/api/auth/me');
+    if (!res.ok) throw new Error(`Server error ${res.status}`);
+    return res.data; // { id, username, role }
   },
 };
 
@@ -362,14 +400,23 @@ async function deleteTask(taskId) {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
 
+  if (deletingTaskIds.has(taskId)) return; // already in flight — ignore repeat click
   if (!window.confirm(`Delete "${task.title}"?\n\nThis action cannot be undone.`)) return;
 
+  deletingTaskIds.add(taskId);
   try {
     await api.deleteTask(taskId);
     showToast('Task deleted.', 'info');
     renderBoard();
   } catch (err) {
-    showToast(`Could not delete task: ${err.message}`, 'error');
+    if (err.message.includes('404')) {
+      // Already gone (stale card, e.g. deleted from another tab/click) — resync silently.
+      renderBoard();
+    } else {
+      showToast(`Could not delete task: ${err.message}`, 'error');
+    }
+  } finally {
+    deletingTaskIds.delete(taskId);
   }
 }
 
@@ -460,20 +507,109 @@ document.addEventListener('keydown', e => {
 });
 
 /* ════════════════════════════════════════════════════════
+   Auth — login / logout
+════════════════════════════════════════════════════════ */
+
+function showLoginForm() {
+  document.getElementById('login-modal').classList.add('modal-open');
+  document.getElementById('app-shell')?.classList.add('app-hidden');
+}
+
+function hideLoginForm() {
+  document.getElementById('login-modal').classList.remove('modal-open');
+  document.getElementById('app-shell')?.classList.remove('app-hidden');
+}
+
+function applyCurrentUser(user) {
+  currentRole = user.role;
+  const config = ROLE_CONFIG[currentRole];
+  const indicator = document.getElementById('role-indicator');
+  if (config) {
+    indicator.textContent = `${user.username} · ${config.label}`;
+    indicator.style.color = config.color;
+  } else {
+    indicator.textContent = user.username;
+  }
+}
+
+function setLoginError(message) {
+  const errorEl = document.getElementById('login-error');
+  const textEl = document.getElementById('login-error-text');
+  textEl.textContent = message;
+  errorEl.classList.toggle('login-error-visible', Boolean(message));
+  const usernameInput = document.getElementById('login-username');
+  const passwordInput = document.getElementById('login-password');
+  usernameInput.setAttribute('aria-invalid', String(Boolean(message)));
+  passwordInput.setAttribute('aria-invalid', String(Boolean(message)));
+  if (message) {
+    const card = document.querySelector('.login-card');
+    card.classList.remove('shake');
+    // Force reflow so the animation can retrigger on repeated errors.
+    void card.offsetWidth;
+    card.classList.add('shake');
+  }
+}
+
+function setLoginSubmitting(isSubmitting) {
+  const btn = document.getElementById('login-submit-btn');
+  btn.disabled = isSubmitting;
+  btn.classList.toggle('btn-loading', isSubmitting);
+}
+
+async function handleLoginSubmit(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const username = form.elements['login-username'].value.trim();
+  const password = form.elements['login-password'].value;
+  setLoginError('');
+
+  setLoginSubmitting(true);
+  try {
+    const { access_token } = await api.login(username, password);
+    localStorage.setItem(TOKEN_KEY, access_token);
+    const user = await api.me();
+    applyCurrentUser(user);
+    hideLoginForm();
+    form.reset();
+    renderBoard();
+    showToast(`Welcome, ${user.username}.`, 'success');
+  } catch (err) {
+    setLoginError(err.message);
+  } finally {
+    setLoginSubmitting(false);
+  }
+}
+
+function logout() {
+  localStorage.removeItem(TOKEN_KEY);
+  showToast('Logged out.', 'info');
+  showLoginForm();
+}
+
+/* ════════════════════════════════════════════════════════
    Initialisation
 ════════════════════════════════════════════════════════ */
 
-function init() {
-  // Role switcher
-  const roleSelect = document.getElementById('roleSelect');
-  roleSelect.addEventListener('change', e => {
-    currentRole = e.target.value;
-    const config = ROLE_CONFIG[currentRole];
-    const indicator = document.getElementById('role-indicator');
-    indicator.textContent  = config.label;
-    indicator.style.color  = config.color;
-    renderBoard();
-    showToast(`Switched to ${config.label}`, 'info');
+async function init() {
+  // Login form
+  document.getElementById('login-form').addEventListener('submit', handleLoginSubmit);
+  document.getElementById('logout-btn').addEventListener('click', logout);
+
+  const togglePwBtn = document.getElementById('toggle-pw-btn');
+  if (togglePwBtn) {
+    togglePwBtn.addEventListener('click', () => {
+      const pwInput = document.getElementById('login-password');
+      const showing = pwInput.type === 'password';
+      pwInput.type = showing ? 'text' : 'password';
+      togglePwBtn.classList.toggle('active', showing);
+      togglePwBtn.setAttribute('aria-label', showing ? 'Hide password' : 'Show password');
+      togglePwBtn.setAttribute('aria-pressed', String(showing));
+    });
+  }
+
+  // Clear the error state as soon as the user starts correcting their input.
+  ['login-username', 'login-password'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => setLoginError(''));
   });
 
   // FAB — add task
@@ -489,8 +625,21 @@ function init() {
   // Form submission
   document.getElementById('task-form').addEventListener('submit', handleFormSubmit);
 
-  // Kick off first render
-  renderBoard();
-  showToast('Telusko Workflow Engine ready.', 'info');
+  // No token yet? Show login and stop — board renders after successful login.
+  if (!localStorage.getItem(TOKEN_KEY)) {
+    showLoginForm();
+    return;
+  }
+
+  try {
+    const user = await api.me();
+    applyCurrentUser(user);
+    hideLoginForm();
+    renderBoard();
+    showToast('Codecast Workflow Engine ready.', 'info');
+  } catch (err) {
+    localStorage.removeItem(TOKEN_KEY);
+    showLoginForm();
+  }
 }
 document.addEventListener('DOMContentLoaded', init);

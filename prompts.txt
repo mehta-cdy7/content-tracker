@@ -11,3 +11,7 @@ Create corresponding Pydantic v2 schemas in backend/app/schemas/task.py:
 
 Set up the async database engine in backend/app/database.py using
 SQLite with aiosqlite. Include a get_db dependency for FastAPI.
+
+codecast-content-tracker-505613
+
+gcloud builds submit --tag us-central1-docker.pkg.dev/telusko-content-tracker-505613/telusko-repo/telusko-app:latest
