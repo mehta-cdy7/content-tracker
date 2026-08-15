@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import get_settings
 from app.routers import auth, tasks
 
 settings = get_settings()
 
-app = FastAPI(title="Telusko Workflow Engine API")
+app = FastAPI(title="Codecast Workflow Engine API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,3 +24,6 @@ app.include_router(auth.router)
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+app.mount("/", StaticFiles(directory="../frontend", html=True), name="static")

@@ -10,7 +10,6 @@ dist/
 build/
 
 # uv
-uv.lock
 .python-version
 
 # SQLite

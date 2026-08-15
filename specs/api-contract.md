@@ -1,4 +1,4 @@
-# API Contract — Telusko Workflow Engine
+# API Contract — Codecast Workflow Engine
 
 Derived from `frontend/app.js`. Describes the HTTP contract the frontend
 expects when `mockFetch` is replaced with a real `fetch()` wrapper hitting

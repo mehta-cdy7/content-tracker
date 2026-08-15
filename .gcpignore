@@ -1,0 +1,13 @@
+.git
+.gitignore
+.venv
+backend/.venv
+*.db
+*.sqlite
+*.png
+*.jpg
+.claude
+.gemini
+
+# Explicitly include lockfile for Docker uv sync
+!backend/uv.lock

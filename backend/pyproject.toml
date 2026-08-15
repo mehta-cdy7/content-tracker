@@ -1,7 +1,7 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Telusko Workflow Engine — FastAPI backend"
+description = "Codecast Workflow Engine — FastAPI backend"
 authors = [
     { name = "mehta", email = "anmol.mehta018@gmail.com" }
 ]

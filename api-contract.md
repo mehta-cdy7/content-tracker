@@ -1,4 +1,4 @@
-# API Contract — Telusko Workflow Engine
+# API Contract — Codecast Workflow Engine
 
 Derived from `frontend/app.js` (the mock API layer: `mockFetch`, `api.getTasks/createTask/updateTask/deleteTask`). This is the contract the FastAPI backend must satisfy for the frontend to work unmodified — **frontend/app.js is not to be changed**, so field names, routes, and shapes below are fixed by the client, not negotiable.
 
@@ -74,6 +74,14 @@ All calls go through `mockFetch(url, options)` → `fetch(`http://localhost:8000
 - Request body: **partial or full** `Task` fields (backend should treat this as a partial update / PATCH-like semantics despite the `PUT` verb — the frontend never sends the full object on drag/advance, only `{ state }`)
 - Success: expected `2xx` with the updated `Task` as JSON body.
 - Error: non-2xx → thrown, surfaced via toast (`Could not advance task`, `Could not move task`, or `Save failed`, depending on caller).
+
+### `GET /api/tasks/by-role/{role}`
+- Added: 2026-08-13, not yet consumed by frontend/app.js — backend-only scaffold pending frontend wiring.
+- Path param: `role` — one of `Admin | Content | Editor | Uploader` (validated against the `Role` enum; invalid value → `422`)
+- Request body: none
+- Success: `200`, JSON array of `Task`, filtered to `assignedRole == role`, ordered by `id`
+- No auth enforced (matches `GET /api/tasks`)
+- Response shape: `Task[]`
 
 ### `DELETE /api/tasks/{id}`
 - Used by: `api.deleteTask(id)` (`frontend/app.js:131-135`), called from `deleteTask()` (`frontend/app.js:356-374`)
